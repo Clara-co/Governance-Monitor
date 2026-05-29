@@ -1,9 +1,3 @@
-"""
-UNC Hussman AI Governance News Monitor
-Fortune 500 AI Governance Audit Project
-Runs weekly via GitHub Actions and emails a structured briefing.
-"""
-
 import anthropic
 import smtplib
 import json
@@ -13,8 +7,8 @@ from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 
 ANTHROPIC_API_KEY = os.environ["ANTHROPIC_API_KEY"]
-EMAIL_SENDER     = os.environ["EMAIL_SENDER"]
-EMAIL_PASSWORD   = os.environ["EMAIL_PASSWORD"]
+EMAIL_SENDER = os.environ["EMAIL_SENDER"]
+EMAIL_PASSWORD = os.environ["EMAIL_PASSWORD"]
 EMAIL_RECIPIENTS = os.environ["EMAIL_RECIPIENTS"]
 
 FORTUNE_500_WATCH = [
@@ -28,63 +22,35 @@ FORTUNE_500_WATCH = [
     "UPS", "FedEx", "Home Depot", "Costco", "Target",
 ]
 
-SYSTEM_PROMPT = """You are the AI Governance News Monitor for the UNC Hussman
-Fortune 500 AI Governance Audit research project at the Hussman School of
-Journalism and Media, University of North Carolina at Chapel Hill.
-
-Your task: search the web for AI governance news from the past 7 days and
-return a structured briefing.
-
-SEARCH PRIORITY ORDER:
-1. SEC filings (8-K, 10-K, DEF 14A) on SEC EDGAR
-2. Company press releases and investor relations pages
-3. Reuters, Bloomberg, WSJ, Financial Times, AP, Harvard Business Review,
-   KPMG, Deloitte, PwC
-4. Trade publications: CIO Dive, MIT Technology Review, The Verge
-5. Skip aggregators, opinion blogs, and SEO content farms
-
-COVER THESE TOPICS:
-- Fortune 500 AI announcements, policies, principles, or named AI executives
-- AI governance incidents, lawsuits, or regulatory actions
-- New responsible AI frameworks or board-level governance changes
-- Press releases from Fortune 500 IR pages mentioning AI governance
-
-FLAG items involving: Microsoft, Walmart, Amazon, Apple, Alphabet, Meta,
-JPMorgan, Goldman Sachs, IBM, Oracle, Salesforce, Intel, Nvidia, Tesla,
-Disney, Comcast, or other Fortune 500 companies.
-
-RETURN FORMAT: A single JSON object with no markdown, no preamble:
-{
-  "weekOf": "Month DD, YYYY",
-  "headlineIncidents": [
-    {
-      "headline": "...",
-      "company": "...",
-      "date": "...",
-      "summary": "One plain sentence. No em dashes.",
-      "url": "verified URL or empty string",
-      "urlVerified": true
-    }
-  ],
-  "newPoliciesFrameworks": [ ],
-  "regulatoryLegal":       [ ],
-  "worthWatching":         [ ]
-}
-
-RULES:
-- 3 to 5 items per section maximum
-- No em dashes anywhere. Use commas or colons instead
-- If a URL cannot be confirmed as real, set url to "" and urlVerified to false
-- Every summary is one plain sentence, no markdown
-- Do not invent stories. Only include items confirmed via web search
-"""
+SYSTEM_PROMPT = (
+    "You are the AI Governance News Monitor for the UNC Hussman "
+    "Fortune 500 AI Governance Audit research project at the Hussman School of "
+    "Journalism and Media, University of North Carolina at Chapel Hill. "
+    "Your task: search the web for AI governance news from the past 7 days and "
+    "return a structured briefing. "
+    "SEARCH PRIORITY: 1) SEC filings on EDGAR 2) Company press releases and IR pages "
+    "3) Reuters, Bloomberg, WSJ, Financial Times, AP, HBR, KPMG, Deloitte, PwC "
+    "4) CIO Dive, MIT Technology Review, The Verge. Skip aggregators and SEO blogs. "
+    "COVER: Fortune 500 AI announcements, policies, named AI executives, "
+    "governance incidents, lawsuits, regulatory actions, new AI frameworks, board changes. "
+    "FLAG items involving: Microsoft, Walmart, Amazon, Apple, Alphabet, Meta, "
+    "JPMorgan, Goldman Sachs, IBM, Oracle, Salesforce, Intel, Nvidia, Tesla, Disney, Comcast. "
+    "RETURN a single JSON object only, no markdown, no preamble: "
+    '{"weekOf":"Month DD YYYY",'
+    '"headlineIncidents":[{"headline":"...","company":"...","date":"...","summary":"One sentence no em dashes.","url":"verified url or empty","urlVerified":true}],'
+    '"newPoliciesFrameworks":[{"headline":"...","company":"...","date":"...","summary":"...","url":"...","urlVerified":true}],'
+    '"regulatoryLegal":[{"headline":"...","company":"...","date":"...","summary":"...","url":"...","urlVerified":true}],'
+    '"worthWatching":[{"headline":"...","company":"...","date":"...","summary":"...","url":"...","urlVerified":true}]} '
+    "RULES: 3 to 5 items per section. No em dashes. One plain sentence per summary. "
+    "Only include stories confirmed via web search."
+)
 
 
-def run_briefing() -> dict:
-    today    = datetime.today()
+def run_briefing():
+    today = datetime.today()
     week_ago = today - timedelta(days=7)
     date_str = today.strftime("%B %d, %Y")
-    range_str = f"{week_ago.strftime('%B %d')} to {date_str}"
+    range_str = week_ago.strftime("%B %d") + " to " + date_str
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -95,16 +61,11 @@ def run_briefing() -> dict:
         tools=[{"type": "web_search_20250305", "name": "web_search"}],
         messages=[{
             "role": "user",
-            "content": (
-                f"Run the weekly AI governance briefing for {range_str}. "
-                "Search all priority sources thoroughly and return the JSON briefing."
-            )
+            "content": "Run the weekly AI governance briefing for " + range_str + ". Search all priority sources and return the JSON briefing."
         }]
     )
 
-    text_block = next(
-        (b for b in response.content if b.type == "text"), None
-    )
+    text_block = next((b for b in response.content if b.type == "text"), None)
     if not text_block:
         raise ValueError("No text response from Claude.")
 
@@ -112,46 +73,42 @@ def run_briefing() -> dict:
     return json.loads(clean)
 
 
-def is_fortune_500(text: str) -> bool:
+def is_fortune_500(text):
     return any(co.lower() in text.lower() for co in FORTUNE_500_WATCH)
 
 
-def build_plain_text(data: dict) -> str:
+def build_plain_text(data):
     date_str = data.get("weekOf", datetime.today().strftime("%B %d, %Y"))
     lines = [
         "AI GOVERNANCE MONITOR - WEEKLY BRIEFING",
-        f"Week of {date_str}",
+        "Week of " + date_str,
         "Prepared for: UNC Hussman Fortune 500 AI Governance Audit Project",
         "Hussman School of Journalism and Media, UNC Chapel Hill",
         "",
     ]
-
     sections = [
-        ("HEADLINE INCIDENTS",           data.get("headlineIncidents", [])),
-        ("NEW POLICIES AND FRAMEWORKS",  data.get("newPoliciesFrameworks", [])),
-        ("REGULATORY AND LEGAL",         data.get("regulatoryLegal", [])),
-        ("WORTH WATCHING",               data.get("worthWatching", [])),
+        ("HEADLINE INCIDENTS", data.get("headlineIncidents", [])),
+        ("NEW POLICIES AND FRAMEWORKS", data.get("newPoliciesFrameworks", [])),
+        ("REGULATORY AND LEGAL", data.get("regulatoryLegal", [])),
+        ("WORTH WATCHING", data.get("worthWatching", [])),
     ]
-
     for label, items in sections:
         if not items:
             continue
-        lines.append(f"--- {label} ---")
+        lines.append("--- " + label + " ---")
         for i, item in enumerate(items, 1):
-            text     = json.dumps(item)
-            f500     = " [Fortune 500]" if is_fortune_500(text) else ""
-            url      = item.get("url", "")
+            f500 = " [Fortune 500]" if is_fortune_500(json.dumps(item)) else ""
+            url = item.get("url", "")
             verified = item.get("urlVerified", True)
-            lines.append(f"{i}. {item.get('headline', '')}{f500}")
+            lines.append(str(i) + ". " + item.get("headline", "") + f500)
             meta = " | ".join(filter(None, [item.get("company"), item.get("date")]))
             if meta:
-                lines.append(f"   {meta}")
-            lines.append(f"   {item.get('summary', '')}")
+                lines.append("   " + meta)
+            lines.append("   " + item.get("summary", ""))
             if url:
-                lines.append(f"   {url if verified else 'URL unverified - search for this story'}")
+                lines.append("   " + (url if verified else "URL unverified - search for this story"))
             lines.append("")
         lines.append("")
-
     lines += [
         "---",
         "Generated by the UNC Hussman AI Governance News Monitor.",
@@ -161,49 +118,80 @@ def build_plain_text(data: dict) -> str:
     return "\n".join(lines)
 
 
-def build_html(data: dict) -> str:
+def build_html(data):
     date_str = data.get("weekOf", datetime.today().strftime("%B %d, %Y"))
-
     tag_colors = {
-        "HEADLINE INCIDENTS":          ("#FEE2E2", "#991B1B"),
+        "HEADLINE INCIDENTS": ("#FEE2E2", "#991B1B"),
         "NEW POLICIES AND FRAMEWORKS": ("#DBEAFE", "#1E40AF"),
-        "REGULATORY AND LEGAL":        ("#FEF3C7", "#92400E"),
-        "WORTH WATCHING":              ("#D1FAE5", "#065F46"),
+        "REGULATORY AND LEGAL": ("#FEF3C7", "#92400E"),
+        "WORTH WATCHING": ("#D1FAE5", "#065F46"),
     }
-
-    sections_html = ""
     sections = [
-        ("HEADLINE INCIDENTS",           data.get("headlineIncidents", [])),
-        ("NEW POLICIES AND FRAMEWORKS",  data.get("newPoliciesFrameworks", [])),
-        ("REGULATORY AND LEGAL",         data.get("regulatoryLegal", [])),
-        ("WORTH WATCHING",               data.get("worthWatching", [])),
+        ("HEADLINE INCIDENTS", data.get("headlineIncidents", [])),
+        ("NEW POLICIES AND FRAMEWORKS", data.get("newPoliciesFrameworks", [])),
+        ("REGULATORY AND LEGAL", data.get("regulatoryLegal", [])),
+        ("WORTH WATCHING", data.get("worthWatching", [])),
     ]
-
+    sections_html = ""
     for label, items in sections:
         if not items:
             continue
         bg, fg = tag_colors.get(label, ("#F3F4F6", "#111827"))
-        sections_html += f'<div style="margin-bottom:24px;"><div style="display:inline-block;background:{bg};color:{fg};font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;padding:4px 10px;border-radius:4px;margin-bottom:12px;">{label}</div>'
+        sections_html += '<div style="margin-bottom:24px;">'
+        sections_html += '<div style="display:inline-block;background:' + bg + ';color:' + fg + ';font-size:11px;font-weight:600;text-transform:uppercase;padding:4px 10px;border-radius:4px;margin-bottom:12px;">' + label + '</div>'
         for item in items:
-            text     = json.dumps(item)
-            f500     = is_fortune_500(text)
-            url      = item.get("url", "")
+            f500 = is_fortune_500(json.dumps(item))
+            url = item.get("url", "")
             verified = item.get("urlVerified", True)
-            meta     = " | ".join(filter(None, [item.get("company"), item.get("date")]))
-            badge    = '<span style="background:#FEF3C7;color:#92400E;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;white-space:nowrap;margin-right:6px;">Fortune 500</span>' if f500 else ""
-            meta_html = f'<div style="font-size:12px;color:#6B7280;margin-bottom:4px;">{meta}</div>' if meta else ""
-            url_html  = f'<a href="{url}" style="font-size:12px;color:#2563EB;word-break:break-all;">{url if verified else "URL unverified - search for this story"}</a>' if url else ""
-            sections_html += f'<div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px 16px;margin-bottom:10px;background:#FFFFFF;"><div style="margin-bottom:4px;">{badge}<span style="font-size:14px;font-weight:600;color:#111827;line-height:1.4;">{item.get("headline","")}</span></div>{meta_html}<div style="font-size:13px;color:#374151;line-height:1.6;">{item.get("summary","")}</div>{url_html}</div>'
-        sections_html += "</div>"
+            meta = " | ".join(filter(None, [item.get("company"), item.get("date")]))
+            badge = '<span style="background:#FEF3C7;color:#92400E;font-size:10px;font-weight:600;padding:2px 7px;border-radius:10px;margin-right:6px;">Fortune 500</span>' if f500 else ""
+            meta_html = '<div style="font-size:12px;color:#6B7280;margin-bottom:4px;">' + meta + '</div>' if meta else ""
+            url_html = '<a href="' + url + '" style="font-size:12px;color:#2563EB;word-break:break-all;">' + (url if verified else "URL unverified") + '</a>' if url else ""
+            sections_html += '<div style="border:1px solid #E5E7EB;border-radius:8px;padding:14px 16px;margin-bottom:10px;background:#FFFFFF;">'
+            sections_html += '<div style="margin-bottom:4px;">' + badge + '<span style="font-size:14px;font-weight:600;color:#111827;">' + item.get("headline", "") + '</span></div>'
+            sections_html += meta_html
+            sections_html += '<div style="font-size:13px;color:#374151;line-height:1.6;">' + item.get("summary", "") + '</div>'
+            sections_html += url_html
+            sections_html += '</div>'
+        sections_html += '</div>'
 
-    return f"""<!DOCTYPE html>
-<html>
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
-<body style="margin:0;padding:0;background:#F9FAFB;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;">
-<div style="max-width:640px;margin:32px auto;background:#FFFFFF;border-radius:12px;overflow:hidden;border:1px solid #E5E7EB;">
-<div style="background:#1B3A6B;padding:24px 28px;">
-<div style="font-size:20px;font-weight:700;color:#FFFFFF;margin-bottom:4px;">AI Governance Monitor</div>
-<div style="font-size:13px;color:#93C5FD;">Weekly Briefing - Week of {date_str}</div>
-<div style="font-size:12px;color:#60A5FA;margin-top:2px;">UNC Hussman Fortune 500 AI Governance Audit Project</div>
-</div>
-<div style="padding:24px 28px;">{section
+    html = '<!DOCTYPE html><html><head><meta charset="utf-8"></head>'
+    html += '<body style="margin:0;padding:0;background:#F9FAFB;font-family:Arial,sans-serif;">'
+    html += '<div style="max-width:640px;margin:32px auto;background:#FFFFFF;border-radius:12px;border:1px solid #E5E7EB;overflow:hidden;">'
+    html += '<div style="background:#1B3A6B;padding:24px 28px;">'
+    html += '<div style="font-size:20px;font-weight:700;color:#FFFFFF;margin-bottom:4px;">AI Governance Monitor</div>'
+    html += '<div style="font-size:13px;color:#93C5FD;">Weekly Briefing - Week of ' + date_str + '</div>'
+    html += '<div style="font-size:12px;color:#60A5FA;margin-top:2px;">UNC Hussman Fortune 500 AI Governance Audit Project</div>'
+    html += '</div>'
+    html += '<div style="padding:24px 28px;">' + sections_html + '</div>'
+    html += '<div style="background:#F3F4F6;padding:16px 28px;border-top:1px solid #E5E7EB;font-size:12px;color:#9CA3AF;">'
+    html += 'Generated by the UNC Hussman AI Governance News Monitor. Hussman School of Journalism and Media, UNC Chapel Hill.'
+    html += '</div></div></body></html>'
+    return html
+
+
+def send_email(data):
+    date_str = data.get("weekOf", datetime.today().strftime("%B %d, %Y"))
+    subject = "AI Governance Monitor - Weekly Briefing - " + date_str
+    recipients = [r.strip() for r in EMAIL_RECIPIENTS.split(",") if r.strip()]
+
+    msg = MIMEMultipart("alternative")
+    msg["Subject"] = subject
+    msg["From"] = EMAIL_SENDER
+    msg["To"] = ", ".join(recipients)
+    msg.attach(MIMEText(build_plain_text(data), "plain"))
+    msg.attach(MIMEText(build_html(data), "html"))
+
+    with smtplib.SMTP_SSL("smtp.gmail.com", 465) as server:
+        server.login(EMAIL_SENDER, EMAIL_PASSWORD)
+        server.sendmail(EMAIL_SENDER, recipients, msg.as_string())
+
+    print("Briefing sent to: " + ", ".join(recipients))
+
+
+if __name__ == "__main__":
+    print("Running AI Governance briefing...")
+    briefing = run_briefing()
+    print("Briefing generated: " + str(briefing.get("weekOf")))
+    send_email(briefing)
+    print("Done.")
