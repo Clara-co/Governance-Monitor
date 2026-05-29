@@ -54,23 +54,38 @@ def run_briefing():
 
     client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-    response = client.messages.create(
-        model="claude-haiku-4-5-20251001",
-        max_tokens=2000,
-        system=SYSTEM_PROMPT,
-        tools=[{"type": "web_search_20250305", "name": "web_search"}],
-        messages=[{
-            "role": "user",
-            "content": "Run the weekly AI governance briefing for " + range_str + ". Search all priority sources and return the JSON briefing."
-        }]
-    )
+    for attempt in range(3):
+        response = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=2000,
+            system=SYSTEM_PROMPT,
+            tools=[{"type": "web_search_20250305", "name": "web_search"}],
+            messages=[{
+                "role": "user",
+                "content": "Run the weekly AI governance briefing for " + range_str + ". Search the web then return ONLY a JSON object with no extra text."
+            }]
+        )
 
-    text_block = next((b for b in response.content if b.type == "text"), None)
-    if not text_block:
-        raise ValueError("No text response from Claude.")
+        text_blocks = [b for b in response.content if b.type == "text"]
+        print("Attempt " + str(attempt + 1) + ": found " + str(len(text_blocks)) + " text blocks")
 
-    clean = text_block.text.replace("```json", "").replace("```", "").strip()
-    return json.loads(clean)
+        for block in text_blocks:
+            text = block.text.strip()
+            print("Block preview: " + text[:120])
+            clean = text.replace("```json", "").replace("```", "").strip()
+            start = clean.find("{")
+            end = clean.rfind("}") + 1
+            if start >= 0 and end > start:
+                candidate = clean[start:end]
+                try:
+                    return json.loads(candidate)
+                except json.JSONDecodeError as e:
+                    print("JSON parse failed: " + str(e))
+                    continue
+
+        print("Attempt " + str(attempt + 1) + " did not return valid JSON, retrying...")
+
+    raise ValueError("Claude did not return valid JSON after 3 attempts. Check logs above.")
 
 
 def is_fortune_500(text):
