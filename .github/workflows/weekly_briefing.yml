@@ -2,8 +2,11 @@ name: Weekly AI Governance Briefing
 
 on:
   schedule:
-    - cron: "0 9 * * 1"   # Every Monday at 9:00 AM UTC (5 AM Eastern)
-  workflow_dispatch:        # Also allows manual trigger from GitHub UI
+    - cron: "0 9 * * 1"
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   send-briefing:
